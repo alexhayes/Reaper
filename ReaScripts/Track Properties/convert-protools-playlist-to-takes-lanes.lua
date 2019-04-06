@@ -15,7 +15,14 @@
  * Extensions: SWS 2.8.0
 --]]
 
-debug = true
+--PASTE_AS_TAKES_IN_ITEMS = 40603
+TAKE_IMPLODE_ITEMS_ACROSS_TRACKS_INTO_TAKES = 40438
+--ITEM_REMOVE_ALL_EMPTY_TAKE_LANES = 41348
+ITEM_SELECT_ALL_ITEMS_IN_TRACK = 40421
+ITEM_UNSELECT_ALL_ITEMS = 40289
+TRACK_UNSELECT_ALL_TRACKS = 40297
+
+debug = false
 
 function Msg(value)
     if debug then
@@ -28,8 +35,39 @@ function getTrackName(track)
 end
 
 
+function selectTrackMediaItems(track)
+    -- Select all media items in a track
+    reaper.SetTrackSelected(track, 1)
+    reaper.Main_OnCommandEx(ITEM_SELECT_ALL_ITEMS_IN_TRACK, 0, 0)
+    Msg("    Select track: " .. getTrackName(track))
+end
+
+function createTakeLanes()
+    Msg("    Create take lanes...")
+    -- Now move the item into a take lane
+    reaper.Main_OnCommandEx(TAKE_IMPLODE_ITEMS_ACROSS_TRACKS_INTO_TAKES, 0, 0)
+
+    unselectAll()
+end
+
+function processLastTrack(current_track)
+    -- Last track in the folder
+    reaper.SetMediaTrackInfo_Value(current_track, "I_FOLDERDEPTH", -1)
+    reaper.SetMediaTrackInfo_Value(current_track, "B_MUTE", 1)
+    selectTrackMediaItems(current_track)
+
+    createTakeLanes()
+end
+
+function unselectAll()
+    reaper.Main_OnCommandEx(TRACK_UNSELECT_ALL_TRACKS, 0, 0)
+    reaper.Main_OnCommandEx(ITEM_UNSELECT_ALL_ITEMS, 0, 0)
+end
+
 function main()
     parent_found = false
+
+    unselectAll()
 
     for i = 0, reaper.CountTracks(0) - 1 do
         if not parent_found then
@@ -42,6 +80,10 @@ function main()
         next_track = reaper.GetTrack(0, i + 1)
 
         if next_track == nil then
+            -- current_track is the last track
+            if parent_found then
+                processLastTrack(current_track)
+            end
             break
         end
 
@@ -54,20 +96,22 @@ function main()
                 reaper.SetMediaTrackInfo_Value(current_track, "I_FOLDERDEPTH", 1)
                 reaper.SetMediaTrackInfo_Value(next_track, "B_MUTE", 1)
                 parent_found = true
+
+                selectTrackMediaItems(current_track)
+                selectTrackMediaItems(next_track)
             else
                 reaper.SetMediaTrackInfo_Value(current_track, "B_MUTE", 1)
+                selectTrackMediaItems(current_track)
+                --reaper.SetMediaTrackInfo_Value(next_track, "B_MUTE", 1)
             end
+
         else
             Msg(tostring(i) .. "\t"  .. parent_track_name .. "\t"  .. current_track_name .. "\t" .. next_track_name .. "\t0")
-            parent_found = false
 
-            -- This is the last child
-            reaper.SetMediaTrackInfo_Value(current_track, "I_FOLDERDEPTH", -1)
-            reaper.SetMediaTrackInfo_Value(current_track, "B_MUTE", 1)
-
-
-            -- Now collapse the parent
-
+            if parent_found then
+                parent_found = false
+                processLastTrack(current_track)
+            end
         end
     end
 end
